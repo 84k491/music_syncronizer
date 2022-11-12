@@ -22,7 +22,7 @@ mod object;
 use std::env;
 use std::collections::HashMap;
 use origin::OriginType;
-use origin::PoolBuilder;
+use origin::Pool;
 
 fn print_help() {
     println!("Tool for syncronizing folders in several destinations with multiple sources");
@@ -73,7 +73,7 @@ fn main() -> Result<(), i32>{
     for (origin_type, path_vec) in origins {
         for path in path_vec {
             println!("Entry: {:?}: {}", origin_type, path);
-            let builder = PoolBuilder::new(&origin_type, &path);
+            let pool = Pool::new(&origin_type, &path);
         }
     }
     Ok(())
