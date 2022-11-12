@@ -15,7 +15,7 @@ pub struct Pool {
     path: String,
     origin_type: OriginType,
     top_level_objects: Vec<Object>,
-    total_size: u32,
+    total_size: u64,
 }
 
 impl Pool {
@@ -31,33 +31,32 @@ impl Pool {
         let ls_res = ls(&path, &config).unwrap();
 
         let mut objects = Vec::<Object>::new();
-        for map in ls_res.items {
-            let size_value = map.get(&DirEntryAttr::Size).unwrap();
-            let name = {
-                match map.get(&DirEntryAttr::Name).unwrap() {
-                    DirEntryValue::String(s) => s.as_str(),
-                    _ => panic!(),
-                }
-            };
-            let size = {
-                match map.get(&DirEntryAttr::Size).unwrap() {
-                    DirEntryValue::U64(v) => v,
-                    _ => panic!(),
-                }
-            };
-
-            objects.push(Object::new(&name.to_string(), *size as u32));
+        let mut total_size: u64 = 0;
+        for res_map in &ls_res.items {
+            let obj = Object::from_ls_result(&res_map);
+            println!("Entry: {}; Size: {}; total: {}", obj.path, obj.size, total_size);
+            total_size += obj.size;
+            objects.push(obj);
         }
 
         let pool = Pool {
             path: path.to_string(),
             origin_type: *t,
             top_level_objects: objects,
-            total_size: 1,};
+            total_size: total_size,};
 
         for tlo in &pool.top_level_objects {
             println!("There is an object {}", tlo.path);
         }
         pool
+    }
+
+    pub fn contains(self, obj: &Object) -> bool {
+        for local_obj in &self.top_level_objects {
+            if obj.path == local_obj.path {
+                return true;
+            }
+        }
+        return false;
     }
 }

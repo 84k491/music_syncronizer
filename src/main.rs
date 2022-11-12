@@ -58,23 +58,25 @@ fn main() -> Result<(), i32>{
     for (index, arg) in args.iter().enumerate() {
         let flag = to_flag(&arg);
         match flag {
-        Some(v) => {
-            println!("There is a flag {:?}", v);
-            if index != args.len() - 1 {
-                origins.entry(v).or_default().push(args[index + 1].clone());
+            Some(v) => {
+                if index != args.len() - 1 {
+                    origins.entry(v).or_default().push(args[index + 1].clone());
+                }
             }
-        }
-        None => { println!("No flag: {}", arg)}
+            None => {}
         }
     }
 
-    println!("Origins size: {}", origins.len());
-    println!("");
+    let mut pools = Vec::new();
     for (origin_type, path_vec) in origins {
         for path in path_vec {
             println!("Entry: {:?}: {}", origin_type, path);
             let pool = Pool::new(&origin_type, &path);
+            pools.push(pool);
         }
     }
+
+    
+
     Ok(())
 }
