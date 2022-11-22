@@ -1,9 +1,4 @@
-// parse arguments. Multiple sources, Multiple destinations
 /// unified source pool
-/// class, that will represent a folder:
-    /// path
-    /// name
-    /// origin (source / dest / tmp)
 
 /// find every file in destinations with source. mark to remove absent
 
@@ -23,6 +18,8 @@ use std::env;
 use std::collections::HashMap;
 use origin::OriginType;
 use origin::Pool;
+use crate::object::ActionType;
+use std::collections::VecDeque;
 
 fn print_help() {
     println!("Tool for syncronizing folders in several destinations with multiple sources");
@@ -44,7 +41,12 @@ fn to_flag(s: &String) -> Option<OriginType> {
     }
 }
 
-fn main() -> Result<(), i32>{
+fn pool_with_largest_space<'a>(pools: &'a mut Vec::<Pool>) -> &'a mut Pool {
+    pools.get_mut(0).unwrap()
+}
+
+// TODO check size of the objects
+fn main() -> Result<(), i32> {
     println!("Start");
 
     let args: Vec<String> = env::args().collect();
@@ -67,16 +69,64 @@ fn main() -> Result<(), i32>{
         }
     }
 
-    let mut pools = Vec::new();
-    for (origin_type, path_vec) in origins {
-        for path in path_vec {
-            println!("Entry: {:?}: {}", origin_type, path);
-            let pool = Pool::new(&origin_type, &path);
-            pools.push(pool);
-        }
+    let mut source_pool_united = Pool::new(OriginType::Source);
+    match origins.get(&OriginType::Source) {
+        Some(vec_of_paths) => {
+            for path in vec_of_paths {
+               source_pool_united.inflate_from_path(&path);
+            }
+        },
+        _ => panic!("No source specified"),
+    };
+
+    let mut destination_pools = Vec::<Pool>::new();
+    match origins.get(&OriginType::Destination) {
+        Some(vec_of_paths) => {
+            for path in vec_of_paths {
+                let mut pool = Pool::new(OriginType::Destination);
+                pool.inflate_from_path(path);
+                destination_pools.push(pool);
+            }
+        },
+        _ => panic!("No destination specified"),
+    };
+
+    for pool in &mut destination_pools {
+        pool.remove_difference(&source_pool_united);
     }
 
-    
+    // TODO to guarantee, that there will be enough space after this point
+
+    let mut copy_queue = 
+        VecDeque::from(source_pool_united.extract_difference_with_multiple_pools(&destination_pools));
+    // files will be moved out on the line above
+    while let Some(obj) = copy_queue.pop_front() {
+        let target_pool = pool_with_largest_space(&mut destination_pools);
+
+        if !target_pool.has_available_space(obj.size) {
+            copy_queue.append(&mut VecDeque::from(target_pool.extract_for_free_space(obj.size)));
+        }
+
+        target_pool.push(obj);
+    }
+
+    // TODO check if no errors, show results, ask to proceed
+
+    for pool in &mut destination_pools {
+        pool.invoke_actions_with_type(ActionType::Remove);
+    }
+
+    for pool in &mut destination_pools {
+        pool.invoke_actions_with_type(ActionType::MoveIn);
+        // TODO there will be miscalculated space it we won't remove move out actions
+
+        // TODO here can be an error with "not enough space" when moving a lot to a pool,
+        // which has some objects to move after
+    }
+
+    for pool in &mut destination_pools {
+        pool.invoke_actions_with_type(ActionType::CopyIn);
+    }
 
     Ok(())
 }
