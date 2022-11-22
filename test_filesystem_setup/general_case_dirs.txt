@@ -1,0 +1,3 @@
+/home/bakar/tmp/to_one/
+/home/bakar/tmp/to_two/
+/home/bakar/tmp/to_three/
