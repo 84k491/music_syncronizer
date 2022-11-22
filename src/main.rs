@@ -65,8 +65,6 @@ fn bytes_to_mb(size: u64) -> f64 {
 }
 
 fn main() -> Result<(), i32> {
-    let bytes_in_mb = 1024 * 1024;
-
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 {
         print_help();
@@ -187,7 +185,7 @@ fn main() -> Result<(), i32> {
             let result = fs_extra::copy_items(&from, &origin_path, &options);
 
             match result {
-                Ok(s) => println!("Copying {} to {}", obj.compose_full_path().display(), origin_path),
+                Ok(_) => println!("Copying {} to {}", obj.compose_full_path().display(), origin_path),
                 Err(s) => println!("Error: {}", s),
             };
         });

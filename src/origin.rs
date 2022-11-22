@@ -80,7 +80,6 @@ impl Pool {
                 self.total_size += object.size;
                 self.available_space -= object.size;
             },
-            _ => {},
         };
     }
 
@@ -160,6 +159,7 @@ impl Pool {
             match self.extract_biggest_object_smaller_than(space_to_free as u64) {
                 Some(obj) => {
                     space_to_free -= obj.size as i64;
+                    self.plan_action(ActionType::MoveOut, &obj);
                     result.push(obj);
                 },
                 None => panic!("No object to cleanup space ({})", additional_space_needed),
