@@ -20,6 +20,7 @@ use origin::OriginType;
 use origin::Pool;
 use crate::object::ActionType;
 use std::collections::VecDeque;
+use fs_extra::dir::CopyOptions;
 
 fn print_help() {
     println!("Tool for syncronizing folders in several destinations with multiple sources");
@@ -41,14 +42,24 @@ fn to_flag(s: &String) -> Option<OriginType> {
     }
 }
 
-fn pool_with_largest_space<'a>(pools: &'a mut Vec::<Pool>) -> &'a mut Pool {
-    pools.get_mut(0).unwrap()
+fn pool_with_largest_space_available<'a>(pools: &'a mut Vec::<Pool>) -> &'a mut Pool {
+    let mut iter: i32 = -1; // TODO use optional
+    let mut max_space: u64 = 0;
+    for (i, pool) in pools.iter().enumerate() {
+       if pool.available_space > max_space {
+           iter = i as i32;
+           max_space = pool.available_space;
+       }
+    }
+
+    if iter < 0 {
+        panic!("Can't find a destionation with some space");
+    }
+
+    return pools.get_mut(iter as usize).unwrap();
 }
 
-// TODO check size of the objects
 fn main() -> Result<(), i32> {
-    println!("Start");
-
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 {
         print_help();
@@ -101,9 +112,10 @@ fn main() -> Result<(), i32> {
         VecDeque::from(source_pool_united.extract_difference_with_multiple_pools(&destination_pools));
     // files will be moved out on the line above
     while let Some(obj) = copy_queue.pop_front() {
-        let target_pool = pool_with_largest_space(&mut destination_pools);
+        let target_pool = pool_with_largest_space_available(&mut destination_pools);
 
-        if !target_pool.has_available_space(obj.size) {
+        if !target_pool.has_space_for_object(&obj) {
+            println!("No space (need {}) for {}", obj.size, &obj.path);
             copy_queue.append(&mut VecDeque::from(target_pool.extract_for_free_space(obj.size)));
         }
 
@@ -113,11 +125,15 @@ fn main() -> Result<(), i32> {
     // TODO check if no errors, show results, ask to proceed
 
     for pool in &mut destination_pools {
-        pool.invoke_actions_with_type(ActionType::Remove);
+        pool.invoke_actions_with_type(ActionType::Remove, |obj, _| {
+            println!("Removing {}=>{}", obj.origin_path, obj.path);
+        });
     }
 
     for pool in &mut destination_pools {
-        pool.invoke_actions_with_type(ActionType::MoveIn);
+        pool.invoke_actions_with_type(ActionType::MoveIn, |obj, origin_path| {
+            println!("Moving {}=>{} to {}", obj.origin_path, obj.path, origin_path);
+        });
         // TODO there will be miscalculated space it we won't remove move out actions
 
         // TODO here can be an error with "not enough space" when moving a lot to a pool,
@@ -125,7 +141,17 @@ fn main() -> Result<(), i32> {
     }
 
     for pool in &mut destination_pools {
-        pool.invoke_actions_with_type(ActionType::CopyIn);
+        pool.invoke_actions_with_type(ActionType::CopyIn, |obj, origin_path| {
+            let mut from = Vec::<String>::new();
+            let options = CopyOptions::new();
+            from.push(obj.compose_full_path().into_os_string().into_string().unwrap());
+            let result = fs_extra::copy_items(&from, &origin_path, &options);
+
+            match result {
+                Ok(s) => println!("Copying {} to {}", obj.compose_full_path().display(), origin_path),
+                Err(s) => println!("Error: {}", s),
+            };
+        });
     }
 
     Ok(())
