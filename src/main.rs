@@ -59,7 +59,14 @@ fn pool_with_largest_space_available<'a>(pools: &'a mut Vec::<Pool>) -> &'a mut 
     return pools.get_mut(iter as usize).unwrap();
 }
 
+fn bytes_to_mb(size: u64) -> f64 {
+    let bytes_in_mb: f64 = 1024. * 1024.;
+    size as f64 / bytes_in_mb
+}
+
 fn main() -> Result<(), i32> {
+    let bytes_in_mb = 1024 * 1024;
+
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 {
         print_help();
@@ -106,11 +113,43 @@ fn main() -> Result<(), i32> {
         pool.remove_difference(&source_pool_united);
     }
 
-    // TODO to guarantee, that there will be enough space after this point
-
     let mut copy_queue = 
         VecDeque::from(source_pool_united.extract_difference_with_multiple_pools(&destination_pools));
     // files will be moved out on the line above
+
+    let queue_size_bytes = {
+        let mut result = 0;
+
+        for obj in &copy_queue {
+            result += obj.size;
+        };
+        result
+    };
+    let available_space_bytes = {
+        let mut res = 0;
+        for pool in &destination_pools {
+            println!("Destination {} has {}Mb available", &pool.path, bytes_to_mb(pool.available_space));
+            res += pool.available_space;
+        };
+        res
+    };
+    if copy_queue.is_empty() {
+        println!("Nothing to copy. Have {}Mb available", bytes_to_mb(available_space_bytes));
+        return Ok(());
+    }
+    println!("Need to copy {}b", queue_size_bytes);
+
+    if queue_size_bytes >= available_space_bytes {
+        panic!(
+            "Not enough space! {}Mb more needed",
+            bytes_to_mb(queue_size_bytes - available_space_bytes));
+    }
+    else {
+        println!(
+            "Space check passed. Have {}Mb more",
+            bytes_to_mb(available_space_bytes - queue_size_bytes));
+    }
+
     while let Some(obj) = copy_queue.pop_front() {
         let target_pool = pool_with_largest_space_available(&mut destination_pools);
 
